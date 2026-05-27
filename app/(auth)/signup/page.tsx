@@ -1,11 +1,12 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 
-export default function SignupPage({
+export default async function SignupPage({
   searchParams,
 }: {
   searchParams: Promise<{ error?: string; message?: string }>
 }) {
+  const { error: formError, message: formMessage } = await searchParams
   async function signup(formData: FormData) {
     'use server'
     const supabase = await createClient()
@@ -21,6 +22,12 @@ export default function SignupPage({
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="w-80">
         <h1 className="text-2xl font-bold mb-6">Create your account</h1>
+        {formError && (
+          <p className="text-sm text-red-600 mb-4">{formError}</p>
+        )}
+        {formMessage && (
+          <p className="text-sm text-green-600 mb-4">{formMessage}</p>
+        )}
         <form action={signup} className="flex flex-col gap-3">
           <input
             name="email"

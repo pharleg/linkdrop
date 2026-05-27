@@ -1,11 +1,12 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 
-export default function LoginPage({
+export default async function LoginPage({
   searchParams,
 }: {
   searchParams: Promise<{ error?: string }>
 }) {
+  const { error: formError } = await searchParams
   async function login(formData: FormData) {
     'use server'
     const supabase = await createClient()
@@ -21,6 +22,9 @@ export default function LoginPage({
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="w-80">
         <h1 className="text-2xl font-bold mb-6">Sign in to LinkDrop</h1>
+        {formError && (
+          <p className="text-sm text-red-600 mb-4">{formError}</p>
+        )}
         <form action={login} className="flex flex-col gap-3">
           <input
             name="email"

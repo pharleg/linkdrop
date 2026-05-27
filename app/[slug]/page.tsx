@@ -17,7 +17,15 @@ export default async function SlugPage({
 
   if (!link || !link.active) notFound()
 
-  if (link.destination_url) redirect(link.destination_url)
+  if (link.destination_url) {
+    try {
+      const url = new URL(link.destination_url)
+      if (!['https:', 'http:'].includes(url.protocol)) notFound()
+    } catch {
+      notFound()
+    }
+    redirect(link.destination_url)
+  }
 
   // proposal_id set — rendering deferred to Phase 6
   return (
