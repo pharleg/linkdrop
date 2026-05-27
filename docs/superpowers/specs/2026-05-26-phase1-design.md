@@ -62,28 +62,6 @@ Table creation order matters: `proposals` before `links` (FK dependency).
 
 ### Tables
 
-**links**
-```sql
-id               uuid PRIMARY KEY DEFAULT gen_random_uuid()
-user_id          uuid REFERENCES auth.users NOT NULL
-slug             text UNIQUE NOT NULL
-destination_url  text
-proposal_id      uuid REFERENCES proposals(id) NULLABLE
-created_at       timestamptz DEFAULT now()
-notify_on_first_click  boolean DEFAULT false
-active           boolean DEFAULT true
-```
-
-**clicks**
-```sql
-id          uuid PRIMARY KEY DEFAULT gen_random_uuid()
-link_id     uuid REFERENCES links(id) NOT NULL
-clicked_at  timestamptz DEFAULT now()
-ip_hash     text
-user_agent  text
-referrer    text
-```
-
 **proposals**
 ```sql
 id                  uuid PRIMARY KEY DEFAULT gen_random_uuid()
@@ -97,6 +75,29 @@ created_at          timestamptz DEFAULT now()
 expires_at          timestamptz
 ```
 
+**links**
+```sql
+id               uuid PRIMARY KEY DEFAULT gen_random_uuid()
+user_id          uuid REFERENCES auth.users NOT NULL
+slug             text UNIQUE NOT NULL
+destination_url  text
+proposal_id      uuid REFERENCES proposals(id)
+created_at       timestamptz DEFAULT now()
+notify_on_first_click  boolean DEFAULT false
+active           boolean DEFAULT true
+CONSTRAINT destination_or_proposal CHECK (destination_url IS NOT NULL OR proposal_id IS NOT NULL)
+```
+
+**clicks**
+```sql
+id          uuid PRIMARY KEY DEFAULT gen_random_uuid()
+link_id     uuid REFERENCES links(id) NOT NULL
+clicked_at  timestamptz DEFAULT now()
+ip_hash     text
+user_agent  text
+referrer    text
+```
+
 **signatures**
 ```sql
 id              uuid PRIMARY KEY DEFAULT gen_random_uuid()
@@ -107,6 +108,7 @@ signer_email    text NOT NULL
 signature_data  text NOT NULL  -- base64 PNG
 signed_at       timestamptz DEFAULT now()
 ip_hash         text
+CONSTRAINT one_signature_per_link UNIQUE (proposal_id, link_id)
 ```
 
 ### Indexes
@@ -129,6 +131,7 @@ CREATE INDEX ON signatures(proposal_id);
 **clicks**
 - SELECT (owner): `link_id IN (SELECT id FROM links WHERE user_id = auth.uid())`
 - INSERT (public): permissive — anonymous visitors write click rows
+- **Note:** fully permissive INSERT means a valid `link_id` can be spammed. Rate limiting is deferred to Phase 3 (click logging implementation) but must not be forgotten — bot traffic will corrupt analytics.
 
 **proposals**
 - SELECT (owner): `user_id = auth.uid()`
@@ -138,6 +141,7 @@ CREATE INDEX ON signatures(proposal_id);
 **signatures**
 - SELECT (owner): `proposal_id IN (SELECT id FROM proposals WHERE user_id = auth.uid())`
 - INSERT (public): `proposal_id IN (SELECT id FROM proposals WHERE expires_at IS NULL OR expires_at > now())`
+- Duplicate signing prevented at schema level via `UNIQUE (proposal_id, link_id)` — not just UI
 
 ---
 
@@ -196,8 +200,22 @@ NEXT_PUBLIC_OAUTH_ENABLED=false
 
 ---
 
+## Local Dev Setup
+
+1. `npx create-next-app@latest linkdrop --typescript --tailwind --app --no-src-dir`
+2. `npm install @supabase/ssr @supabase/supabase-js`
+3. Copy `.env.local` values from Supabase project settings (API → Project URL + anon key)
+4. Run `supabase/migrations/0001_schema.sql` against the remote project via Supabase SQL editor or MCP
+5. Create a test user via Supabase Auth dashboard (Authentication → Users → Add user)
+6. `npm run dev` — verify `/login` works and redirects to `/dashboard`
+
+No local Supabase stack (Docker) required for Phase 1. All dev targets the remote `linkdrop.io` project directly.
+
+---
+
 ## Out of Scope (Later Phases)
 
+- Click rate limiting (Phase 3)
 - Click logging (Phase 3)
 - Proposal page rendering (Phase 6)
 - SignatureCanvas implementation (Phase 7)
