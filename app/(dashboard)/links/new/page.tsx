@@ -1,11 +1,13 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 
-export default function NewLinkPage({
+export default async function NewLinkPage({
   searchParams,
 }: {
   searchParams: Promise<{ error?: string }>
 }) {
+  const { error: formError } = await searchParams
+
   async function createLink(formData: FormData) {
     'use server'
     const supabase = await createClient()
@@ -29,10 +31,10 @@ export default function NewLinkPage({
       .select('id')
       .single()
 
-    if (error) {
+    if (error || !data) {
       redirect(
         `/dashboard/links/new?error=${encodeURIComponent(
-          error.code === '23505' ? 'That slug is already taken.' : error.message
+          error?.code === '23505' ? 'That slug is already taken.' : (error?.message ?? 'Unknown error')
         )}`
       )
     }
@@ -43,6 +45,9 @@ export default function NewLinkPage({
   return (
     <div className="max-w-md">
       <h1 className="text-xl font-semibold mb-6">New Link</h1>
+      {formError && (
+        <p className="text-sm text-red-600 mb-4">{formError}</p>
+      )}
       <form action={createLink} className="flex flex-col gap-4">
         <div>
           <label className="text-sm font-medium block mb-1">Slug</label>

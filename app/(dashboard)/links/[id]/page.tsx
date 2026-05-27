@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 
 export default async function LinkDetailPage({
@@ -8,10 +8,17 @@ export default async function LinkDetailPage({
 }) {
   const { id } = await params
   const supabase = await createClient()
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
   const { data: link } = await supabase
     .from('links')
     .select('id, slug, destination_url, active, notify_on_first_click, created_at')
     .eq('id', id)
+    .eq('user_id', user.id)
     .single()
 
   if (!link) notFound()

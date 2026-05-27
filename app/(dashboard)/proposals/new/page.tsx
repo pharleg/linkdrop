@@ -1,11 +1,13 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 
-export default function NewProposalPage({
+export default async function NewProposalPage({
   searchParams,
 }: {
   searchParams: Promise<{ error?: string }>
 }) {
+  const { error: formError } = await searchParams
+
   async function createProposal(formData: FormData) {
     'use server'
     const supabase = await createClient()
@@ -25,9 +27,9 @@ export default function NewProposalPage({
       .select('id')
       .single()
 
-    if (error) {
+    if (error || !data) {
       redirect(
-        `/dashboard/proposals/new?error=${encodeURIComponent(error.message)}`
+        `/dashboard/proposals/new?error=${encodeURIComponent(error?.message ?? 'Unknown error')}`
       )
     }
 
@@ -37,6 +39,9 @@ export default function NewProposalPage({
   return (
     <div className="max-w-xl">
       <h1 className="text-xl font-semibold mb-6">New Proposal</h1>
+      {formError && (
+        <p className="text-sm text-red-600 mb-4">{formError}</p>
+      )}
       <form action={createProposal} className="flex flex-col gap-4">
         <div>
           <label className="text-sm font-medium block mb-1">Title</label>
