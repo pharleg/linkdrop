@@ -3,8 +3,13 @@ import { after } from 'next/server'
 import { headers } from 'next/headers'
 import { createServiceClient } from '@/lib/supabase/service'
 import { logClick } from '@/lib/track'
+import ProposalViewer from '@/components/ProposalViewer'
 
-export default async function SlugPage({ params }: { params: Promise<{ slug: string }> }) {
+export default async function SlugPage({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}) {
   const { slug } = await params
   const supabase = createServiceClient()
 
@@ -24,25 +29,80 @@ export default async function SlugPage({ params }: { params: Promise<{ slug: str
   after(() => logClick({ linkId: link.id, ip, userAgent, referrer }))
 
   if (link.proposal_id) {
-    const { data: proposal } = await supabase
-      .from('proposals')
-      .select('id, title, user_id')
-      .eq('id', link.proposal_id)
-      .single()
+    const [{ data: proposal }, { data: latestRevision }] = await Promise.all([
+      supabase
+        .from('proposals')
+        .select('id, title, user_id, signature_required')
+        .eq('id', link.proposal_id)
+        .single(),
+      supabase
+        .from('proposal_revisions')
+        .select('revision, body')
+        .eq('proposal_id', link.proposal_id)
+        .order('revision', { ascending: false })
+        .limit(1)
+        .single(),
+    ])
 
-    const { data: ownerProfile } = await supabase
-      .from('profiles')
-      .select('hide_branding')
-      .eq('id', proposal?.user_id ?? '')
-      .single()
+    if (!proposal || !latestRevision) notFound()
+
+    const [{ data: ownerProfile }, { data: markups }, { data: existingSig }] =
+      await Promise.all([
+        supabase
+          .from('profiles')
+          .select('hide_branding')
+          .eq('id', proposal.user_id)
+          .single(),
+        supabase
+          .from('markups')
+          .select('id, paragraph_index, markup_type, comment_text, reply_text, author_role')
+          .eq('proposal_id', proposal.id)
+          .eq('revision', latestRevision.revision)
+          .order('created_at', { ascending: true }),
+        supabase
+          .from('signatures')
+          .select('id')
+          .eq('proposal_id', proposal.id)
+          .eq('link_id', link.id)
+          .limit(1)
+          .single(),
+      ])
+
+    const alreadySigned = !!existingSig
 
     return (
       <div className="max-w-2xl mx-auto p-8">
-        <h1 className="text-2xl font-semibold">{proposal?.title ?? 'Proposal'}</h1>
-        <p className="text-sm text-gray-400 mt-2">Sign this proposal at <a href={`/${slug}/sign`} className="underline">/{slug}/sign</a></p>
+        <div className="mb-6 flex items-start justify-between">
+          <h1 className="text-2xl font-semibold">{proposal.title}</h1>
+          {proposal.signature_required && !alreadySigned && (
+            <a
+              href={`/${slug}/sign`}
+              className="shrink-0 ml-4 bg-black text-white text-sm px-4 py-2 rounded"
+            >
+              Sign
+            </a>
+          )}
+          {alreadySigned && (
+            <span className="shrink-0 ml-4 text-xs text-green-700 bg-green-50 border border-green-200 px-2.5 py-1 rounded">
+              Signed
+            </span>
+          )}
+        </div>
+
+        <ProposalViewer
+          proposalId={proposal.id}
+          revision={latestRevision.revision}
+          body={latestRevision.body}
+          markups={(markups ?? []) as Parameters<typeof ProposalViewer>[0]['markups']}
+          canMarkup={true}
+        />
+
         {!ownerProfile?.hide_branding && (
-          <p className="text-xs text-gray-400 text-center mt-8">
-            Powered by <a href="https://linkdrop.io" className="underline">LinkDrop</a>
+          <p className="text-xs text-gray-400 text-center mt-12">
+            Powered by{' '}
+            <a href="https://linkdrop.io" className="underline">
+              LinkDrop
+            </a>
           </p>
         )}
       </div>
