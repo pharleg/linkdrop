@@ -53,7 +53,7 @@ export default async function ProposalDetailPage({ params }: { params: Promise<{
               <li key={sig.id} className="border rounded px-3 py-2">
                 <p className="text-sm font-medium">{sig.signer_name}</p>
                 <p className="text-xs text-gray-500">{sig.signer_email}</p>
-                <p className="text-xs font-mono text-gray-400">{new Date(sig.signed_at).toISOString()} · v{sig.revision}</p>
+                <p className="text-xs font-mono text-gray-400">{sig.signed_at ? new Date(sig.signed_at).toISOString() : ''} · v{sig.revision}</p>
               </li>
             ))}
           </ul>
