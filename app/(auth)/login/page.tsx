@@ -15,7 +15,7 @@ export default async function LoginPage({
       password: formData.get('password') as string,
     })
     if (error) redirect(`/login?error=${encodeURIComponent(error.message)}`)
-    redirect('/dashboard')
+    redirect('/dashboard/links')
   }
 
   return (
