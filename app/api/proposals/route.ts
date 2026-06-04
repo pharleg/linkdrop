@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/service'
 import { checkProposalLimit } from '@/lib/limits'
 
 export async function GET() {
@@ -7,7 +8,8 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { data, error } = await supabase
+  const serviceSupabase = createServiceClient()
+  const { data, error } = await serviceSupabase
     .from('proposals')
     .select('id, title, logo_url, signature_required, expires_at, created_at, proposal_revisions(id, revision, created_at)')
     .eq('user_id', user.id)
@@ -31,7 +33,9 @@ export async function POST(request: NextRequest) {
   if (!title) return NextResponse.json({ error: 'title required' }, { status: 400 })
   if (!proposalBody) return NextResponse.json({ error: 'body required' }, { status: 400 })
 
-  const { data: proposal, error: proposalError } = await supabase
+  const serviceSupabase = createServiceClient()
+
+  const { data: proposal, error: proposalError } = await serviceSupabase
     .from('proposals')
     .insert({ user_id: user.id, title, logo_url, signature_required, expires_at })
     .select('id')
@@ -41,7 +45,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: proposalError?.message ?? 'Failed to create proposal' }, { status: 500 })
   }
 
-  const { error: revisionError } = await supabase
+  const { error: revisionError } = await serviceSupabase
     .from('proposal_revisions')
     .insert({ proposal_id: proposal.id, revision: 1, body: proposalBody })
 
@@ -59,10 +63,17 @@ export async function PUT(request: NextRequest) {
   const { id, body: revisionBody } = body
   if (!id || !revisionBody) return NextResponse.json({ error: 'id and body required' }, { status: 400 })
 
-  const { data: proposal } = await supabase.from('proposals').select('id').eq('id', id).eq('user_id', user.id).single()
+  const serviceSupabase = createServiceClient()
+
+  const { data: proposal } = await serviceSupabase
+    .from('proposals')
+    .select('id')
+    .eq('id', id)
+    .eq('user_id', user.id)
+    .single()
   if (!proposal) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const { data: latest } = await supabase
+  const { data: latest } = await serviceSupabase
     .from('proposal_revisions')
     .select('revision')
     .eq('proposal_id', id)
@@ -71,7 +82,9 @@ export async function PUT(request: NextRequest) {
     .single()
 
   const nextRevision = (latest?.revision ?? 0) + 1
-  const { error } = await supabase.from('proposal_revisions').insert({ proposal_id: id, revision: nextRevision, body: revisionBody })
+  const { error } = await serviceSupabase
+    .from('proposal_revisions')
+    .insert({ proposal_id: id, revision: nextRevision, body: revisionBody })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ revision: nextRevision })
 }
